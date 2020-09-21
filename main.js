@@ -2,7 +2,33 @@ const fs = require('fs')
 const pretty = require('pretty')
 const path = require('path')
 const parse5 = require('parse5')
-var minify = require('html-minifier').minify;
+const minify = require('html-minifier').minify;
+const merge = require('deepmerge')
+const default_options = {
+  googleAnalytics: '',
+  js: [
+    'modernizr',
+    'plugins',
+    'main'
+  ],
+  openGraph: {
+    title: 'My page',
+    type: 'ty type',
+    url: 'my url',
+    image: 'imy image ',
+  },
+  css: [
+    'main',
+    'normalize',
+    'sakura',
+//    'mnd'
+  ],
+  minify: {
+    removeAttributeQuotes: true,
+    removeComments: true,
+    collapseWhitespace: true
+  }
+}
 
 function filterSrcScripts(scripts){
   return scripts.filter( el => {
@@ -42,38 +68,42 @@ function filterAttribute(scripts, attrMatch){
   })
 
 }
-function rebuild(document, html, body){
+function rebuild(document, html, head, body){
 //console.log(document)
 //console.log(html)
 //console.log(body)
+  html.childNodes.push(head)
   html.childNodes.push(body)
   document.childNodes.push(html)
   return document
 }
 
-function createBoilerplate(options){
+function createBoilerplate(options=default_options){
+  options = merge(default_options, options)
   const boilerplate = fs.readFileSync(path.join(__dirname,'node_modules/html5-boilerplate/dist/index.html'),'utf8')
+  const css = {
+    normalize: fs.readFileSync(path.join(__dirname,'node_modules/html5-boilerplate/dist/css/normalize.css'),'utf8'),
+    main: fs.readFileSync(path.join(__dirname,'node_modules/html5-boilerplate/dist/css/main.css'),'utf8'),
+  }
   var document = parse5.parse(boilerplate)
-//console.log(document)
-//console.log(document)
   var html = document.childNodes.filter(obj => obj.nodeName === 'html')[0]
   document.childNodes = document.childNodes.filter(obj => obj.nodeName !== 'html')
+  
 
   var body = html.childNodes.filter(obj => obj.nodeName === 'body')[0]
+  var head = html.childNodes.filter(obj => obj.nodeName === 'head')[0]
   html.childNodes = html.childNodes.filter(obj => obj.nodeName !== 'body')
+  html.childNodes = html.childNodes.filter(obj => obj.nodeName !== 'head')
 
-
+  // JS
   scripts = body.childNodes.filter(obj => obj.nodeName === 'script')
   body.childNodes = body.childNodes.filter(obj => obj.nodeName !== 'script')
-//  document.html.body.childNodes = document.html.body.childNodes.filter( obj => obj.nodeName !== 'script' )
-//  document.childNodes.filter(obj => obj.nodeName === 'html')[0] = 'hi'
- // console.log(document.childNodes.filter(obj => obj.nodeName === 'html')[0])
-  if (options.google_analytics.length > 0){
+  if (options.googleAnalytics.length > 0){
     for(let i = 0; i < scripts.length; i++){
       var script = scripts[i]
       const childNode = script.childNodes[0]
       if(childNode && childNode.value){
-        scripts[i].childNodes[0].value = childNode.value.replace('UA-XXXXX-Y',options.google_analytics)
+        scripts[i].childNodes[0].value = childNode.value.replace('UA-XXXXX-Y',options.googleAnalytics)
       }
     }
   } else {
@@ -87,37 +117,55 @@ function createBoilerplate(options){
   }
   if (!options.modernizr){
     scripts = filterAttribute(scripts, 'modernizr.*js')
+    html.attrs = html.attrs.filter( el => {
+      return el.value !== "no-js"
+    })
   }
   body.childNodes = body.childNodes.concat(scripts)
-//console.log(body.childNodes)
-//console.log(scripts)
-//console.log(scripts.length)
-//console.log(scripts[0].attrs)
-  document = rebuild(document,html,body)
+  // /JS
+
+  // OG
+/*
+  const ogPrototype = head.childNodes.filter(obj=>{
+    if(obj.attrs && obj.attrs[0] && obj.attrs[0].value.startsWith('og:')){
+      return true
+    }
+    return false
+  })[0]
+*/
+  head.childNodes = head.childNodes.filter(obj => {
+    if(obj.attrs && obj.attrs[0] && obj.attrs[0].value.startsWith('og:')){
+      return false
+    }
+    return true
+  })
+  const ogKeys = Object.keys(options.openGraph)
+  for (let i = 0; i < ogKeys.length; i++){
+
+    const property = ogKeys[i] 
+    const content = options.openGraph[ogKeys[i]]
+    const ogFragment = `<meta property="og:${property}" content="${content}">`
+    const metaOg = parse5.parseFragment(ogFragment, head.childNodes)
+
+    head.childNodes.push(metaOg.childNodes[0])
+  }
+  // /OG
+  head.childNodes = head.childNodes.filter(obj => {
+    if (!obj.attrs) return true
+    const stylesheet = obj.attrs.filter(el=>{ return el.value !== 'stylesheet'})
+    if (stylesheet.length > 1) return true
+    return false
+  })
+  options.css = options.css.filter((item, index) => options.css.indexOf(item) === index)
+  for(let i = 0; i < options.css.length; i++){
+    const fragment = `<link rel=stylesheet href=css/${options.css[i]}.css>`
+    const node = parse5.parseFragment(fragment, head.childNodes)
+    head.childNodes.push(node.childNodes[0])
+  }
+  document = rebuild(document,html,head, body)
   const htmlString = pretty(minify(parse5.serialize(document),options.minify))
- // console.log(document)
   console.log(htmlString)
   return htmlString
 }
 
-const options = {
-  google_analytics: 'uub',
-  modernizr: false,
-  plugins: false,
-  main: false,
-  open_graph: {
-    title: 'My page',
-    type: 'ty type',
-    url: 'my url',
-    image: 'imy image ',
-  },
-  css: '',
-  minify: {
-    removeAttributeQuotes: true,
-    removeComments: true,
-    collapseWhitespace: true
-  }
-}
-
-
-createBoilerplate(options)
+module.exports = createBoilerplate
