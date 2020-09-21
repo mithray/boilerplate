@@ -1,0 +1,4 @@
+---
+- command: generate
+  description: Generate Boilerplate
+  action: lib/generate
