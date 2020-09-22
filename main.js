@@ -1,22 +1,23 @@
 const fs = require('fs')
 const pretty = require('pretty')
+const csso = require('csso')
 const path = require('path')
 const parse5 = require('parse5')
 const minify = require('html-minifier').minify;
 const merge = require('deepmerge')
 const default_options = {
   googleAnalytics: '',
+  jsonld: {
+    "@context": "https://schema.org",
+    "@type": "",
+    "title": "this tittle",
+    "description": "this site is aosetuh eonhu"
+  },
   js: [
     'modernizr',
     'plugins',
     'main'
   ],
-  openGraph: {
-    title: 'My page',
-    type: 'ty type',
-    url: 'my url',
-    image: 'imy image ',
-  },
   css: [
     'main',
     'normalize',
@@ -24,11 +25,18 @@ const default_options = {
 //    'mnd'
   ],
   minify: {
-    removeAttributeQuotes: true,
     removeComments: true,
     collapseWhitespace: true
   }
 }
+default_options.openGraph = {
+    title: default_options.jsonld.title || '',
+    type: default_options.jsonld.type || '',
+    url: default_options.jsonld.url || '',
+    image: default_options.jsonld.image || '',
+    description: default_options.jsonld.description || '',
+  }
+default_options.description = default_options.jsonld.description
 
 function filterSrcScripts(scripts){
   return scripts.filter( el => {
@@ -151,17 +159,31 @@ function createBoilerplate(options=default_options){
   }
   // /OG
   head.childNodes = head.childNodes.filter(obj => {
-    if (!obj.attrs) return true
-    const stylesheet = obj.attrs.filter(el=>{ return el.value !== 'stylesheet'})
-    if (stylesheet.length > 1) return true
+//    console.log(obj)
+    if (!obj.attrs || obj.attrs.length < 1) return true
+    const notStylesheet = obj.attrs.filter(el=>{ return el.value !== 'stylesheet'})
+    if (notStylesheet.length > 0) return true
     return false
   })
   options.css = options.css.filter((item, index) => options.css.indexOf(item) === index)
   for(let i = 0; i < options.css.length; i++){
-    const fragment = `<link rel=stylesheet href=css/${options.css[i]}.css>`
+    var fragment = ''
+/*
+    if(options.css[i].startsWith('sakura')){
+      const data = fs.readFileSync(path.join(__dirname,'node_modules/sakura.css/css/',options.css[i]+'.css'),'utf8')
+      fragment = `<style type="text/css">${csso.minify(data).css}</style>`
+    } else {
+    }*/
+      fragment = `<link rel=stylesheet href=css/${options.css[i]}.css>`
     const node = parse5.parseFragment(fragment, head.childNodes)
     head.childNodes.push(node.childNodes[0])
   }
+
+//   <meta charset="utf-8">
+  // <title></title>
+
+
+
   document = rebuild(document,html,head, body)
   const htmlString = pretty(minify(parse5.serialize(document),options.minify))
   console.log(htmlString)
@@ -169,3 +191,5 @@ function createBoilerplate(options=default_options){
 }
 
 module.exports = createBoilerplate
+
+createBoilerplate()

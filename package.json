@@ -10,6 +10,7 @@
   "license": "MIT",
   "dependencies": {
     "@mithray/fcli": "0.0.11",
+    "csso": "^4.0.3",
     "deepmerge": "^4.2.2",
     "html-minifier": "^4.0.0",
     "html5-boilerplate": "^8.0.0",
